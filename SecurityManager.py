@@ -6,6 +6,9 @@ from . import LMSManager
 class SecurityManager:
   lms = None
   DEF_FPS = 25
+  DEF_WIDTH = 1280
+  DEF_HEIGHT = 720
+  DEF_LOOKAHEAD = 0
   
   def __init__(self, host, port):
     self.lms = LMSManager.LMSManager(host, port)
@@ -38,6 +41,21 @@ class SecurityManager:
 
     self.lms.filterEvent(self.videoResamplerId, 'configure', {'pixelFormat': 2})
     self.lms.filterEvent(self.videoResampler2Id, 'configure', {'pixelFormat': 2})
+
+    self.lms.filterEvent(self.videoMixerId, 
+                         'configure', 
+                         {'fps': self.DEF_FPS, 
+                           'width': self.DEF_WIDTH,
+                           'height': self.DEF_HEIGHT})
+
+    self.lms.filterEvent(self.videoMixer2Id, 
+                         'configure', 
+                         {'fps': self.DEF_FPS, 
+                           'width': self.DEF_WIDTH,
+                           'height': self.DEF_HEIGHT})
+
+    self.lms.filterEvent(self.videoEncoderId, 'configure', {'fps': self.DEF_FPS, 'lookahead': self.DEF_LOOKAHEAD})
+    self.lms.filterEvent(self.videoEncoder2Id, 'configure', {'fps': self.DEF_FPS, 'lookahead': self.DEF_LOOKAHEAD})
 
     try:
       self.lms.createPath(self.outputPathId, 
@@ -107,6 +125,21 @@ class SecurityManager:
         break
 
     return size
+
+  def getPathFromDst(self, state, dstFId, dstRId):
+    path = None
+    for path in state['paths']:
+      if path['destinationFilter'] == dstFId and path['destinationReader'] == dstRId:
+        return path
+
+  def getFilterType(self, state, fId):
+    fType = None
+    for cFilter in state['filters']:
+      if cFilter['id'] == fId:
+        fType = cFilter['type']
+        break
+
+    return fType
 
   def connectInputSource(self, state, inputFilterId, inputWriterId):
     decId = self.getMaxFilterId(state) + 1
@@ -237,5 +270,56 @@ class SecurityManager:
 
   def stopPipe(self):
     self.lms.stop()
+
+  def setOutputFPS(self, fps, main):
+    state = self.lms.getState()
+
+    if main:
+      mixId = self.videoMixerId
+      encId = self.videoEncoderId
+    else:
+      mixId = self.videoMixer2Id
+      encId = self.videoEncoder2Id
+
+    channels = self.getChannels(state, mixId)
+
+    for channel in channels:
+      path = self.getPathFromDst(state, mixId, channel['id'])
+      if path == None:
+        raise Exception("Path not found for channel {}".format(*[channel['id']]))
+      for fId in path['filters']:
+        if self.getFilterType(state, fId) == 'videoResampler':
+          self.lms.filterEvent(fId, 'configure', {'fps': fps})
+
+    self.lms.filterEvent(mixId, 'configure', {'fps': fps})
+    self.lms.filterEvent(encId, 'configure', {'fps': fps})
+
+  def setOutputResolution(self, width, height, main):
+    state = self.lms.getState()
+
+    if main:
+      mixId = self.videoMixerId
+    else:
+      mixId = self.videoMixer2Id
+
+    channels = self.getChannels(state, mixId)
+    mixCols = math.ceil(math.sqrt(len(channels)))
+
+    for channel in channels:
+      path = self.getPathFromDst(state, mixId, channel['id'])
+      if path == None:
+        raise Exception("Path not found for channel {}".format(*[channel['id']]))
+      for fId in path['filters']:
+        if self.getFilterType(state, fId) == 'videoResampler':
+          if main: 
+            self.lms.filterEvent(fId, 'configure', {'width': width, 'height': height})
+          else:
+            self.lms.filterEvent(fId, 
+                                 'configure', 
+                                 {'width': width // mixCols,
+                                  'height': height // mixCols})
+
+    self.lms.filterEvent(mixId, 'configure', {'width': width, 'height': height})
+
 
 
