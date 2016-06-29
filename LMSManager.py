@@ -25,6 +25,7 @@ class LMSManager:
     return res
 
   def sendEvents(self, eJson):
+    res = None
     try:
       self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
       self.sock.connect((self.host, self.port))
@@ -41,6 +42,8 @@ class LMSManager:
       
       if 'error' in res and res['error'] != None:
         raise Exception(res['error'])
+
+    print(json.dumps(eJson))
 
     return res
 
@@ -66,8 +69,6 @@ class LMSManager:
     params = {'id': pId, 'orgFilterId': orgFilterId, 'dstFilterId': dstFilterId, 'orgWriterId': orgWriterId, 'dstReaderId': dstReaderId, 'midFiltersIds': filtersIds}
     event = {'action': 'createPath', 'params': params} 
     eJson = {'events': [event]}
-
-    print(json.dumps(eJson))
 
     return self.sendEvents(eJson)
         
