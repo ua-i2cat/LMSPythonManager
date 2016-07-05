@@ -8,7 +8,7 @@ class SecurityManager:
   DEF_FPS = 25
   DEF_WIDTH = 1280
   DEF_HEIGHT = 720
-  DEF_LOOKAHEAD = 0
+  DEF_LOOKAHEAD = 4
   
   def __init__(self, host, port):
     self.lms = LMSManager.LMSManager(host, port)
@@ -141,10 +141,13 @@ class SecurityManager:
 
     return fType
 
-  def connectInputSource(self, state, inputFilterId, inputWriterId):
-    decId = self.getMaxFilterId(state) + 1
-    resId = decId + 1
-    res2Id = resId + 1
+  def connectInputSource(self, state, inputFilterId, inputWriterId, raw):
+    if not raw:
+      decId = self.getMaxFilterId(state) + 1
+      resId = decId + 1
+    else:
+      resId = inputFilterId + 1
+      res2Id = resId + 1
 
     srcPathId = self.getMaxPathId(state) + 1
     mainPathId = srcPathId + 1
@@ -152,8 +155,9 @@ class SecurityManager:
 
     outputReaderId = self.getMaxVideoChannel(state, self.videoMixerId) + 1
 
-    try: 
-      self.lms.createFilter(decId, "videoDecoder")
+    try:
+      if not raw: 
+        self.lms.createFilter(decId, "videoDecoder")
       self.lms.createFilter(resId, "videoResampler") 
       self.lms.createFilter(res2Id, "videoResampler")
     except: 
@@ -179,27 +183,39 @@ class SecurityManager:
                                               'pixelFormat': 0,
                                               'width': size[0] // mixCols,
                                               'height': size[1] // mixCols})
+    if not raw:
+      self.lms.createPath(srcPathId, 
+                          inputFilterId,
+                          decId,
+                          inputWriterId, -1, [])
 
-    self.lms.createPath(srcPathId, 
-                        inputFilterId,
-                        decId,
-                        inputWriterId, -1, [])
+      self.lms.createPath(mainPathId, 
+                          decId,
+                          self.videoMixerId,
+                          -1, outputReaderId,
+                          [resId])
 
-    self.lms.createPath(mainPathId, 
-                        decId,
-                        self.videoMixerId,
-                        -1, outputReaderId,
-                        [resId])
+      self.lms.createPath(gridPathId, 
+                          decId,
+                          self.videoMixer2Id,
+                          -1, -1,
+                          [res2Id])
+    else:
+      self.lms.createPath(mainPathId, 
+                          inputFilterId,
+                          self.videoMixerId,
+                          -1, outputReaderId,
+                          [resId])
 
-    self.lms.createPath(gridPathId, 
-                        decId,
-                        self.videoMixer2Id,
-                        -1, -1,
-                        [res2Id])
+      self.lms.createPath(gridPathId, 
+                          inputFilterId,
+                          self.videoMixer2Id,
+                          -1, -1,
+                          [res2Id])
 
     return outputReaderId
 
-  def getState():
+  def getState(self):
     return self.lms.getState()
 
   def addRTSPSource(self, uri, sourceId):
@@ -225,12 +241,36 @@ class SecurityManager:
       if count >= 10 and search:
         raise Exception("No successful RTSP negotiation")
 
-    chnl = self.connectInputSource(state, self.receiverId, port)
+    chnl = self.connectInputSource(state, self.receiverId, port, False)
 
     self.commuteChannel(chnl)
     self.updateGrid() 
 
     return chnl
+
+  def addV4LSource(self, device, width, height, fps, pformat = "YUYV", forceformat = True):
+    state = self.lms.getState()
+    capId = self.getMaxFilterId(state) + 1
+    
+    try:
+      self.lms.createFilter(capId, "v4lcapture")
+    except:
+      raise Exception("Failed creating V4LFilter")
+
+    self.lms.filterEvent(capId, 'configure', {'fps': fps,
+                                              'device': device,
+                                              'width': width,
+                                              'height': height})
+
+    ## TODO: wait until ready
+
+    chnl = self.connectInputSource(state, capId, -1, True)
+
+    self.commuteChannel(chnl)
+    self.updateGrid()
+
+    return self.lms.getState() 
+
     
   def commuteChannel(self, channel):
     state = self.lms.getState()
@@ -291,7 +331,6 @@ class SecurityManager:
         if self.getFilterType(state, fId) == 'videoResampler':
           self.lms.filterEvent(fId, 'configure', {'fps': fps})
 
-    self.lms.filterEvent(mixId, 'configure', {'fps': fps})
     self.lms.filterEvent(encId, 'configure', {'fps': fps})
 
   def setOutputResolution(self, width, height, main):
@@ -321,5 +360,30 @@ class SecurityManager:
 
     self.lms.filterEvent(mixId, 'configure', {'width': width, 'height': height})
 
+
+  def setEncoderParams(self, bitrate, gop, lookahead, bFrames, threads, annexb, preset, main):
+    if main:
+      encId = self.videoEncoderId
+    else:
+      encId = self.videoEncoder2Id 
+
+    self.lms.filterEvent(encId, 'configure', {'bitrate': bitrate, 'gop': gop, 
+                                                'lookahead': lookahead, 'bframes': bFrames, 
+                                                'threads': threads, 'annexb': annexb, 
+                                                'preset': preset})
+
+  def getEncoderParams(self, main):
+    if main:
+      encId = self.videoEncoderId
+    else:
+      encId = self.videoEncoder2Id
+
+    state = self.lms.getState()
+    
+    for cFilter in state['filters']:
+      if cFilter['id'] == encId:
+        return cFilter
+
+    return None
 
 
