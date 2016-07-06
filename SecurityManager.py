@@ -256,8 +256,9 @@ class SecurityManager:
   def getState(self):
     return self.lms.getState()
 
-  def addRTSPSource(self, uri, sourceId):
-    self.lms.filterEvent(self.receiverId, 'addSession', {'id': sourceId, 'uri': uri, 'progName': ''})
+  def addRTSPSource(self, uri, sourceId, keepAlive = True):
+    self.lms.filterEvent(self.receiverId, 'addSession', {'id': sourceId, 'uri': uri, 
+                         'progName': '', 'keepAlive': keepAlive})
 
     port = None
     count = 0
