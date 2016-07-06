@@ -44,6 +44,7 @@ class SecurityManager:
     self.videoEncoder2Id = 6
     self.videoMixer2Id = 7
     self.videoResampler2Id = 8
+    self.sharedMemoryId = 9
     self.outputPathId = 1
     self.gridPathId = 2
     self.mainOutputStreamId = 1
@@ -58,6 +59,7 @@ class SecurityManager:
       self.lms.createFilter(self.videoEncoderId, 'videoEncoder')
       self.lms.createFilter(self.videoMixerId, 'videoMixer')
       self.lms.createFilter(self.videoResamplerId, 'videoResampler')
+      self.lms.createFilter(self.sharedMemoryId, 'sharedMemory')
       if grid:
         self.lms.createFilter(self.videoEncoder2Id, 'videoEncoder')
         self.lms.createFilter(self.videoMixer2Id, 'videoMixer')
@@ -90,7 +92,7 @@ class SecurityManager:
                      self.videoMixerId, 
                      self.transmitterId, 
                      -1, self.mainOutputStreamId, 
-                     [self.videoResamplerId, self.videoEncoderId])
+                     [self.sharedMemoryId, self.videoResamplerId, self.videoEncoderId])
 
       if grid:
         self.lms.createPath(self.gridPathId, 
@@ -449,4 +451,10 @@ class SecurityManager:
 
     return None
 
+  def getSharedMemoryId(self):
+    state = self.lms.getState()
+    
+    for cFilter in state['filters']:
+      if cFilter['id'] == self.sharedMemoryId:
+        return cFilter['memoryId']
 
