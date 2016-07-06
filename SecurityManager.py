@@ -1,3 +1,27 @@
+"""
+SecurityManager.py  - This is a controller for a remote LMS instance
+                      for a security scenario
+ 
+Copyright (C) 2016  Fundació i2CAT, Internet i Innovació digital a Catalunya
+
+This file is part of media-streamer.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+Authors: David Cassany <david.cassany@i2cat.net>  
+"""
+
 import time
 import math
 
@@ -24,38 +48,42 @@ class SecurityManager:
     self.gridPathId = 2
     self.mainOutputStreamId = 1
     self.gridOutputStreamId = 2
+    self.grid = False
     
-  def startPipe(self):
+  def startPipe(self, grid = False):
+    self.grid = grid
     try:
       self.lms.createFilter(self.receiverId, 'receiver')
       self.lms.createFilter(self.transmitterId, 'transmitter')
       self.lms.createFilter(self.videoEncoderId, 'videoEncoder')
       self.lms.createFilter(self.videoMixerId, 'videoMixer')
       self.lms.createFilter(self.videoResamplerId, 'videoResampler')
-      self.lms.createFilter(self.videoEncoder2Id, 'videoEncoder')
-      self.lms.createFilter(self.videoMixer2Id, 'videoMixer')
-      self.lms.createFilter(self.videoResampler2Id, 'videoResampler')
+      if grid:
+        self.lms.createFilter(self.videoEncoder2Id, 'videoEncoder')
+        self.lms.createFilter(self.videoMixer2Id, 'videoMixer')
+        self.lms.createFilter(self.videoResampler2Id, 'videoResampler')
     except:
       self.lms.stop()
       raise Exception("Failed createing filters. Pipe cleared")
 
     self.lms.filterEvent(self.videoResamplerId, 'configure', {'pixelFormat': 2})
-    self.lms.filterEvent(self.videoResampler2Id, 'configure', {'pixelFormat': 2})
+    if grid:
+      self.lms.filterEvent(self.videoResampler2Id, 'configure', {'pixelFormat': 2})
 
     self.lms.filterEvent(self.videoMixerId, 
                          'configure', 
-                         {'fps': self.DEF_FPS, 
+                         {'fps': 0, 
                            'width': self.DEF_WIDTH,
                            'height': self.DEF_HEIGHT})
-
-    self.lms.filterEvent(self.videoMixer2Id, 
-                         'configure', 
-                         {'fps': self.DEF_FPS, 
-                           'width': self.DEF_WIDTH,
-                           'height': self.DEF_HEIGHT})
-
     self.lms.filterEvent(self.videoEncoderId, 'configure', {'fps': self.DEF_FPS, 'lookahead': self.DEF_LOOKAHEAD})
-    self.lms.filterEvent(self.videoEncoder2Id, 'configure', {'fps': self.DEF_FPS, 'lookahead': self.DEF_LOOKAHEAD})
+
+    if grid:
+      self.lms.filterEvent(self.videoMixer2Id, 
+                           'configure', 
+                           {'fps': 0, 
+                             'width': self.DEF_WIDTH,
+                             'height': self.DEF_HEIGHT})
+      self.lms.filterEvent(self.videoEncoder2Id, 'configure', {'fps': self.DEF_FPS, 'lookahead': self.DEF_LOOKAHEAD})
 
     try:
       self.lms.createPath(self.outputPathId, 
@@ -64,11 +92,13 @@ class SecurityManager:
                      -1, self.mainOutputStreamId, 
                      [self.videoResamplerId, self.videoEncoderId])
 
-      self.lms.createPath(self.gridPathId, 
-                     self.videoMixer2Id, 
-                     self.transmitterId, 
-                     -1, self.gridOutputStreamId, 
-                     [self.videoResampler2Id, self.videoEncoder2Id])
+      if grid:
+        self.lms.createPath(self.gridPathId, 
+                       self.videoMixer2Id, 
+                       self.transmitterId, 
+                       -1, self.gridOutputStreamId, 
+                       [self.videoResampler2Id, self.videoEncoder2Id])
+
     except: 
       self.lms.stop()
       raise Exception("Failed connecting path. Pipe cleared")
@@ -77,15 +107,19 @@ class SecurityManager:
                          'addRTSPConnection', 
                          {'id': self.mainOutputStreamId, 
                             'name': 'output', 
-                            'txFormat': 'mpegts', 
+                            'txFormat': 'std', 
                             'readers': [self.mainOutputStreamId]})
+    if grid:
+      self.lms.filterEvent(self.transmitterId, 
+                           'addRTSPConnection', 
+                           {'id': self.gridOutputStreamId, 
+                              'name': 'grid', 
+                              'txFormat': 'std', 
+                              'readers': [self.gridOutputStreamId]})
 
-    self.lms.filterEvent(self.transmitterId, 
-                         'addRTSPConnection', 
-                         {'id': self.gridOutputStreamId, 
-                            'name': 'grid', 
-                            'txFormat': 'mpegts', 
-                            'readers': [self.gridOutputStreamId]})
+  def resetPipe(self):
+    self.stopPipe()
+    self.startPipe()
 
   def getMaxFilterId(self, state):
     maxFilterId = 0
@@ -146,8 +180,9 @@ class SecurityManager:
       decId = self.getMaxFilterId(state) + 1
       resId = decId + 1
     else:
-      resId = inputFilterId + 1
-      res2Id = resId + 1
+      resId = self.getMaxFilterId(state) + 1
+    
+    res2Id = resId + 1
 
     srcPathId = self.getMaxPathId(state) + 1
     mainPathId = srcPathId + 1
@@ -159,7 +194,8 @@ class SecurityManager:
       if not raw: 
         self.lms.createFilter(decId, "videoDecoder")
       self.lms.createFilter(resId, "videoResampler") 
-      self.lms.createFilter(res2Id, "videoResampler")
+      if self.grid:
+        self.lms.createFilter(res2Id, "videoResampler")
     except: 
       raise Exception("Failed creating filters")
 
@@ -172,14 +208,15 @@ class SecurityManager:
                                               'width': size[0],
                                               'height': size[1]})
 
-    size = self.getVideoMixerSize(state, self.videoMixer2Id)
-    if size == None:
-      raise Exception("Could not load grid videoMixer size!") 
+    if self.grid:
+      size = self.getVideoMixerSize(state, self.videoMixer2Id)
+      if size == None:
+        raise Exception("Could not load grid videoMixer size!") 
 
-    channels = self.getChannels(state, self.videoMixer2Id)
-    mixCols = math.ceil(math.sqrt(len(channels) + 1))
+      channels = self.getChannels(state, self.videoMixer2Id)
+      mixCols = math.ceil(math.sqrt(len(channels) + 1))
 
-    self.lms.filterEvent(res2Id, 'configure', {'fps': self.DEF_FPS, 
+      self.lms.filterEvent(res2Id, 'configure', {'fps': self.DEF_FPS, 
                                               'pixelFormat': 0,
                                               'width': size[0] // mixCols,
                                               'height': size[1] // mixCols})
@@ -194,24 +231,25 @@ class SecurityManager:
                           self.videoMixerId,
                           -1, outputReaderId,
                           [resId])
+      if self.grid:
+        self.lms.createPath(gridPathId, 
+                            decId,
+                            self.videoMixer2Id,
+                            -1, -1,
+                            [res2Id])
 
-      self.lms.createPath(gridPathId, 
-                          decId,
-                          self.videoMixer2Id,
-                          -1, -1,
-                          [res2Id])
     else:
       self.lms.createPath(mainPathId, 
                           inputFilterId,
                           self.videoMixerId,
                           -1, outputReaderId,
                           [resId])
-
-      self.lms.createPath(gridPathId, 
-                          inputFilterId,
-                          self.videoMixer2Id,
-                          -1, -1,
-                          [res2Id])
+      if self.grid:
+        self.lms.createPath(gridPathId, 
+                            inputFilterId,
+                            self.videoMixer2Id,
+                            -1, -1,
+                            [res2Id])
 
     return outputReaderId
 
@@ -244,7 +282,9 @@ class SecurityManager:
     chnl = self.connectInputSource(state, self.receiverId, port, False)
 
     self.commuteChannel(chnl)
-    self.updateGrid() 
+
+    if self.grid:
+      self.updateGrid() 
 
     return chnl
 
@@ -262,14 +302,28 @@ class SecurityManager:
                                               'width': width,
                                               'height': height})
 
-    ## TODO: wait until ready
+    count = 0
+    wait = True
+    while wait:
+      time.sleep(1)
+      state = self.lms.getState()
+      for cFilter in state['filters']:
+        if cFilter['id'] == capId:
+          if cFilter['status'] == 'capture':
+            wait = False
+
+      count += 1
+      if count >= 10 and search:
+        raise Exception("No successful V4L filter configuration")
 
     chnl = self.connectInputSource(state, capId, -1, True)
 
     self.commuteChannel(chnl)
-    self.updateGrid()
 
-    return self.lms.getState() 
+    if self.grid:
+      self.updateGrid()
+
+    return chnl 
 
     
   def commuteChannel(self, channel):
@@ -311,15 +365,17 @@ class SecurityManager:
   def stopPipe(self):
     self.lms.stop()
 
-  def setOutputFPS(self, fps, main):
+  def setOutputFPS(self, fps, main = True):
     state = self.lms.getState()
 
     if main:
       mixId = self.videoMixerId
       encId = self.videoEncoderId
-    else:
+    elif self.grid:
       mixId = self.videoMixer2Id
       encId = self.videoEncoder2Id
+    else:
+      raise Exception("Grid mode is not enabled")
 
     channels = self.getChannels(state, mixId)
 
@@ -333,13 +389,15 @@ class SecurityManager:
 
     self.lms.filterEvent(encId, 'configure', {'fps': fps})
 
-  def setOutputResolution(self, width, height, main):
+  def setOutputResolution(self, width, height, main = True):
     state = self.lms.getState()
 
     if main:
       mixId = self.videoMixerId
-    else:
+    elif self.grid:
       mixId = self.videoMixer2Id
+    else:
+      raise Exception("There is no grid mode enabled")
 
     channels = self.getChannels(state, mixId)
     mixCols = math.ceil(math.sqrt(len(channels)))
@@ -361,22 +419,26 @@ class SecurityManager:
     self.lms.filterEvent(mixId, 'configure', {'width': width, 'height': height})
 
 
-  def setEncoderParams(self, bitrate, gop, lookahead, bFrames, threads, annexb, preset, main):
+  def setEncoderParams(self, bitrate, gop, lookahead, bFrames, threads, annexb, preset, main = True):
     if main:
       encId = self.videoEncoderId
-    else:
+    elif self.grid:
       encId = self.videoEncoder2Id 
+    else:
+      raise Exception("There is no grid mode enabled")
 
     self.lms.filterEvent(encId, 'configure', {'bitrate': bitrate, 'gop': gop, 
                                                 'lookahead': lookahead, 'bframes': bFrames, 
                                                 'threads': threads, 'annexb': annexb, 
                                                 'preset': preset})
 
-  def getEncoderParams(self, main):
+  def getEncoderParams(self, main = True):
     if main:
       encId = self.videoEncoderId
-    else:
+    elif self.grid:
       encId = self.videoEncoder2Id
+    else:
+      raise Exception("There is no grid mode enabled")
 
     state = self.lms.getState()
     
