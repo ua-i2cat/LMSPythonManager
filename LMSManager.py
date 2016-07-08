@@ -27,7 +27,7 @@ import json
 
 class LMSManager:
   sock = None
-  BUFFER_SIZE = 4096
+  BUFFER_SIZE = 65536
 
   def __init__(self, host, port):
     self.host = host
@@ -59,7 +59,7 @@ class LMSManager:
     finally:
       self.sock.close()
       self.sock = None
-    
+
     if res != None:
       res = json.loads(res.decode())
       
@@ -86,7 +86,20 @@ class LMSManager:
     event = {'action': 'removePath', 'params': params} 
     eJson = {'events': [event]}
 
-    return self.sendEvents(eJson)
+    try:
+      return self.sendEvents(eJson)
+    except Exception as e:
+      print("Error removing path: " + str(e))
+
+  def removeFilter(self, pId):
+    params = {'id': pId}
+    event = {'action': 'removeFilter', 'params': params} 
+    eJson = {'events': [event]}
+
+    try:
+      return self.sendEvents(eJson)
+    except Exception as e:
+      print("Error removing filter: " + str(e))
 
   def createPath(self, pId, orgFilterId, dstFilterId, orgWriterId, dstReaderId, filtersIds):
     params = {'id': pId, 'orgFilterId': orgFilterId, 'dstFilterId': dstFilterId, 'orgWriterId': orgWriterId, 'dstReaderId': dstReaderId, 'midFiltersIds': filtersIds}
@@ -97,7 +110,11 @@ class LMSManager:
         
   def stop(self):
     eJson = {'events': [{'action': 'stop', 'params':{}}]}
-    return self.sendEvents(eJson)
+
+    try:
+      return self.sendEvents(eJson)
+    except Exception as e:
+      print("Error stopping pipe: " + str(e))
 
   def filterEvent(self, fId, action, params):
     eJson = {'events': [{'action': action, 'filterId': fId, 'params': params}]}

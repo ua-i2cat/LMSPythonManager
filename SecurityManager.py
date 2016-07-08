@@ -24,6 +24,8 @@ Authors: David Cassany <david.cassany@i2cat.net>
 
 import time
 import math
+import urllib3
+import os
 
 from . import LMSManager
 
@@ -33,6 +35,7 @@ class SecurityManager:
   DEF_WIDTH = 1280
   DEF_HEIGHT = 720
   DEF_LOOKAHEAD = 4
+  DEF_MAX_FPS = 30
   
   def __init__(self, host, port):
     self.lms = LMSManager.LMSManager(host, port)
@@ -74,7 +77,7 @@ class SecurityManager:
 
     self.lms.filterEvent(self.videoMixerId, 
                          'configure', 
-                         {'fps': 0, 
+                         {'fps': self.DEF_MAX_FPS, 
                            'width': self.DEF_WIDTH,
                            'height': self.DEF_HEIGHT})
     self.lms.filterEvent(self.videoEncoderId, 'configure', {'fps': self.DEF_FPS, 'lookahead': self.DEF_LOOKAHEAD})
@@ -82,7 +85,7 @@ class SecurityManager:
     if grid:
       self.lms.filterEvent(self.videoMixer2Id, 
                            'configure', 
-                           {'fps': 0, 
+                           {'fps': self.DEF_MAX_FPS, 
                              'width': self.DEF_WIDTH,
                              'height': self.DEF_HEIGHT})
       self.lms.filterEvent(self.videoEncoder2Id, 'configure', {'fps': self.DEF_FPS, 'lookahead': self.DEF_LOOKAHEAD})
@@ -118,6 +121,19 @@ class SecurityManager:
                               'name': 'grid', 
                               'txFormat': 'std', 
                               'readers': [self.gridOutputStreamId]})
+
+  def findRecvSessionByPort(self, state, port):
+    print("requested port: " + str(port))
+    for cFilter in state['filters']:
+      if cFilter['id'] == self.receiverId:
+        for session in cFilter['sessions']:
+          print(session['id'])
+          for subsession in session['subsessions']:
+            print("session port " + str(subsession['port']))
+            if port == subsession['port']:
+              return session['id']
+
+    return None
 
   def resetPipe(self):
     self.stopPipe()
@@ -168,6 +184,14 @@ class SecurityManager:
       if path['destinationFilter'] == dstFId and path['destinationReader'] == dstRId:
         return path
 
+  def getPathsFromDstFilter(self, state, dstFId):
+    paths = []
+    for path in state['paths']:
+      if path['destinationFilter'] == dstFId:
+        paths.append(path)
+
+    return paths
+
   def getFilterType(self, state, fId):
     fType = None
     for cFilter in state['filters']:
@@ -176,6 +200,13 @@ class SecurityManager:
         break
 
     return fType
+
+  def filterExists(self, state, fId):
+    for cFilter in state['filters']:
+      if cFilter['id'] == fId:
+        return True
+
+    return False
 
   def connectInputSource(self, state, inputFilterId, inputWriterId, raw):
     if not raw:
@@ -199,6 +230,11 @@ class SecurityManager:
       if self.grid:
         self.lms.createFilter(res2Id, "videoResampler")
     except: 
+      self.lms.removeFilter(resId)
+      if not raw:
+        self.lms.removeFilter(decId)
+      if self.grid:
+        self.lms.removeFilter(res2Id)
       raise Exception("Failed creating filters")
 
     size = self.getVideoMixerSize(state, self.videoMixerId)
@@ -222,45 +258,81 @@ class SecurityManager:
                                               'pixelFormat': 0,
                                               'width': size[0] // mixCols,
                                               'height': size[1] // mixCols})
-    if not raw:
-      self.lms.createPath(srcPathId, 
-                          inputFilterId,
-                          decId,
-                          inputWriterId, -1, [])
 
-      self.lms.createPath(mainPathId, 
-                          decId,
-                          self.videoMixerId,
-                          -1, outputReaderId,
-                          [resId])
-      if self.grid:
-        self.lms.createPath(gridPathId, 
-                            decId,
-                            self.videoMixer2Id,
-                            -1, -1,
-                            [res2Id])
-
-    else:
-      self.lms.createPath(mainPathId, 
-                          inputFilterId,
-                          self.videoMixerId,
-                          -1, outputReaderId,
-                          [resId])
-      if self.grid:
-        self.lms.createPath(gridPathId, 
+    try:
+      if not raw:
+        self.lms.createPath(srcPathId, 
                             inputFilterId,
-                            self.videoMixer2Id,
-                            -1, -1,
-                            [res2Id])
+                            decId,
+                            inputWriterId, -1, [])
+
+        self.lms.createPath(mainPathId, 
+                            decId,
+                            self.videoMixerId,
+                            -1, outputReaderId,
+                            [resId])
+        if self.grid:
+          self.lms.createPath(gridPathId, 
+                              decId,
+                              self.videoMixer2Id,
+                              -1, outputReaderId,
+                              [res2Id])
+
+      else:
+        self.lms.createPath(mainPathId, 
+                            inputFilterId,
+                            self.videoMixerId,
+                            -1, outputReaderId,
+                            [resId])
+        if self.grid:
+          self.lms.createPath(gridPathId, 
+                              inputFilterId,
+                              self.videoMixer2Id,
+                              -1, outputReaderId,
+                              [res2Id])
+
+    except:
+      self.lms.removePath(srcPathId)
+      self.lms.removePath(mainPathId)
+      self.lms.removePath(gridPathId)
+
+      self.lms.removeFilter(resId)
+      if not raw:
+        self.lms.removeFilter(decId)
+      if self.grid:
+        self.lms.removeFilter(res2Id)
+      raise Exception("Failed creating input paths")
 
     return outputReaderId
 
   def getState(self):
     return self.lms.getState()
 
-  def addRTSPSource(self, uri, sourceId, keepAlive = True):
-    self.lms.filterEvent(self.receiverId, 'addSession', {'id': sourceId, 'uri': uri, 
-                         'progName': '', 'keepAlive': keepAlive})
+  def addRTSPSource(self, uri, keepAlive = True):
+    state = self.lms.getState()
+    if not self.filterExists(state, self.videoMixerId) or not self.filterExists(state, self.transmitterId):
+      raise Exception("Is there any pipe ready?")
+
+    if not self.filterExists(state, self.receiverId):
+      try:
+        self.lms.createFilter(self.receiverId, 'receiver')
+      except:
+        raise Exception("Failed creating receiver")
+
+    try:
+      sourceUrl = urllib3.util.url.parse_url(uri)
+    except:
+      raise Exception("Cannot parse given url")
+
+    if sourceUrl.scheme != 'rtsp':
+      raise Exception("Given url is no RTSP")
+
+    sourceId = os.path.basename(sourceUrl.path)
+    if not sourceId:
+      raise Exception("Error, given url may have an empty path")
+
+    self.lms.filterEvent(self.receiverId, 'addSession', {'uri': uri, 
+                         'progName': '', 'keepAlive': keepAlive, 'id': sourceId})
 
     port = None
     count = 0
@@ -283,6 +355,7 @@ class SecurityManager:
         raise Exception("No successful RTSP negotiation")
 
     chnl = self.connectInputSource(state, self.receiverId, port, False)
+      
 
     self.commuteChannel(chnl)
 
@@ -293,6 +366,10 @@ class SecurityManager:
 
   def addV4LSource(self, device, width, height, fps, pformat = "YUYV", forceformat = True):
     state = self.lms.getState()
+    if not self.filterExists(state, self.videoMixerId) or not self.filterExists(state, self.transmitterId):
+      raise Exception("Is there any pipe ready?")
+        
+
     capId = self.getMaxFilterId(state) + 1
     
     try:
@@ -326,12 +403,53 @@ class SecurityManager:
     if self.grid:
       self.updateGrid()
 
-    return chnl 
+    return chnl
+
+  def removeInputChannel(self, chnl):
+    state = self.lms.getState()
+
+    path = self.getPathFromDst(state, self.videoMixerId, chnl)
+    if path != None:
+      origFId = path['originFilter']
+      self.lms.removePath(path['id'])
+      if origFId != self.receiverId and not self.grid:
+        paths = self.getPathsFromDstFilter(state, origFId)
+        for relatedPath in paths:
+          self.lms.removePath(relatedPath['id'])
+          if path['originFilter'] == self.receiverId:
+            sourceId = self.findRecvSessionByPort(state, relatedPath['originWriter'])
+            if sourceId != None:
+              self.lms.filterEvent(self.receiverId, 'removeSession', {'id': sourceId})
+
+    if self.grid:
+      path = self.getPathFromDst(state, self.videoMixer2Id, chnl)
+      if path != None:
+        origFId = path['originFilter']
+        self.lms.removePath(path['id'])
+        if origFId != self.receiverId:
+          paths = self.getPathsFromDstFilter(state, origFId)
+          for relatedPath in paths:
+            self.lms.removePath(relatedPath['id'])
+            if relatedPath['originFilter'] == self.receiverId:
+              sourceId = self.findRecvSessionByPort(state, relatedPath['originWriter'])
+              if sourceId != None:
+                self.lms.filterEvent(self.receiverId, 'removeSession', {'id': sourceId})
+
+      self.updateGrid()
 
     
   def commuteChannel(self, channel):
     state = self.lms.getState()
     mixerCh = self.getChannels(state, self.videoMixerId)
+
+    hasChnl = False
+    for chnl in mixerCh:    
+      if chnl['id'] == channel:
+        hasChnl = True
+        break
+
+    if not hasChnl:
+      raise Exception("The specified channel does not exist")
 
     for chnl in mixerCh:
       if chnl['id'] == channel:
@@ -346,7 +464,7 @@ class SecurityManager:
                              {'id': chnl['id'], 
                                'width': 1, 'height': 1,
                                'x': 0, 'y': 0,
-                               'layer': 1, 'enabled': False, 
+                               'layer': 1, 'enabled': False,
                                'opacity': 1})
 
   def updateGrid(self):
@@ -369,6 +487,9 @@ class SecurityManager:
     self.lms.stop()
 
   def setOutputFPS(self, fps, main = True):
+    if fps > self.DEF_MAX_FPS:
+      raise Exception("Maximum fps is {}, you entered {}.".format(*[self.DEF_MAX_FPS, fps]))
+
     state = self.lms.getState()
 
     if main:
