@@ -38,6 +38,14 @@ class SecurityManager:
   DEF_MAX_FPS = 30
   
   def __init__(self, host, port):
+    """SecurityManager constructor
+
+    It creates a new istance of the SecurityManager. 
+
+    Args:
+      host: The host in which the LiveMediaStreamer is running.
+      port: The port in which the LiveMediaStreamer is listening. 
+    """
     self.lms = LMSManager.LMSManager(host, port)
     self.receiverId = 1
     self.transmitterId = 2
@@ -55,6 +63,16 @@ class SecurityManager:
     self.grid = False
     
   def startPipe(self, grid = False):
+    """Starts a pipe with the appropriate outputs.
+
+    It creates all the filters and paths which do not depend on
+    the input sources. Note this is method is coupled with a concrete 
+    scenario configuration.
+
+    Args:
+      grid: It is a boolean to enable/disable the grid mode functionality. 
+      Disabled by default. It is an optional parameter.
+    """
     self.grid = grid
     try:
       self.lms.createFilter(self.receiverId, 'receiver')
@@ -309,6 +327,26 @@ class SecurityManager:
     return self.lms.getState()
 
   def addRTSPSource(self, uri, keepAlive = True):
+    """Sends required events to add a new RTSP stream as input.
+
+    This method initiates an RTSP negotionation, if the negotiation does not conclude
+    in less than ten seconds, the method fails. Once the negotiation is completed the
+    method registers the new input and creates all required filters (i.e. decoders) and 
+    paths to start processing this input.
+
+    Args: 
+      uri: The RTSP uri of the input source (i.e. the URL of an IP camera)
+      keepAlive: A boolean to enable/disable the keep alive messages form the client
+      to the server. Some RTSP server require periodic GET_PAMETERS messages in order
+      to keep the session alive. Enbled by default. Optional parameter.  
+
+    Returns:
+      The channel assigned to the source. This channel ID will be needed for later management 
+      of this source input.    
+
+    Raises:
+      Exception: In case of failure raises an Exception. 
+    """
     state = self.lms.getState()
     if not self.filterExists(state, self.videoMixerId) or not self.filterExists(state, self.transmitterId):
       raise Exception("Is there any pipe ready?")
@@ -321,6 +359,9 @@ class SecurityManager:
 
     try:
       sourceUrl = urllib3.util.url.parse_url(uri)
+    except AttributeError:
+      # It seams old versions of urllib3 do not have url submodule
+      sourceUrl = urllib3.util.parse_url(uri) 
     except:
       raise Exception("Cannot parse given url")
 
@@ -365,6 +406,38 @@ class SecurityManager:
     return chnl
 
   def addV4LSource(self, device, width, height, fps, pformat = "YUYV", forceformat = True):
+    """Sends required events to add a new Video 4 Linux source.
+
+    This method configures a V4L device, if the configuration does not conclude 
+    properly, the method fails. Once the configuration is completed the
+    method registers the new input and creates all required filters (i.e. decoders) and 
+    paths to start processing this input.
+
+    Args: 
+      device: An string representing the full path of the V4L device to configure (i.e. /dev/video0) 
+      width: The desired width. In case this value cannot be applied due to V4L driver constraints, 
+      the default value will be used.
+      height: The desired height. In case this value cannot be applied due to V4L driver constraints, 
+      the default value will be used.
+      fps: The desired frame rate (in frames per second). In case this value cannot be applied due 
+      to V4L driver constraints a lower value or the default value will be used.
+      pformat: The pixel format of the captured frames. In case this value cannot be applied due to 
+      V4L driver constraints the default value will be used. Default set to "YUYV". Optional parameter.
+      forceformat: If this is set to True, in case the V4L driver cannot set the desired pixel format, 
+      LiveMediaStreamer will treat is as an error and not use the default value. Default value is True.
+      Optional parameter.
+
+    Returns:
+      The channel assigned to the source. This channel ID will be needed for later management 
+      of this source input.    
+
+    .. warning: 
+      Mixing RTSP and V4L sources in a single pipe might lead to synchronization issues, as the timestamps
+      among them might be desynchronized.
+
+    Raises:
+      Exception: In case of failure raises an Exception. 
+    """
     state = self.lms.getState()
     if not self.filterExists(state, self.videoMixerId) or not self.filterExists(state, self.transmitterId):
       raise Exception("Is there any pipe ready?")
@@ -406,6 +479,20 @@ class SecurityManager:
     return chnl
 
   def removeInputChannel(self, chnl):
+    """Sends required events to remove an input channel
+
+    This method removes all related filters and paths to the given channel. 
+
+    Args: 
+      chnl: An Integer representing the ID of the desired channel to remove. 
+
+    .. warning: 
+      This method is not stable as it should, be careful while using it, it might cause
+      LiveMediaStreamer service failures.
+
+    Raises:
+      Exception: In case of failure raises an Exception. 
+    """
     state = self.lms.getState()
 
     path = self.getPathFromDst(state, self.videoMixerId, chnl)
@@ -439,6 +526,17 @@ class SecurityManager:
 
     
   def commuteChannel(self, channel):
+    """Makes the desired channel visible.
+
+    This methond enables/disables the desired channel in main output.
+
+    Args: 
+      chnl: An Integer representing the ID of the desired channel to remove. 
+
+    Raises:
+      Exception: In case of failure or in case of providing a non existing 
+      channel, it raises an Exception. 
+    """
     state = self.lms.getState()
     mixerCh = self.getChannels(state, self.videoMixerId)
 
@@ -484,9 +582,28 @@ class SecurityManager:
       layer += 1
 
   def stopPipe(self):
+    """Clears all data present in the current pipe.
+
+    This method deletes all the filters and paths of the current pipe. 
+    
+    Raises:
+      Exception: In case of failure raises an Exception. 
+    """
     self.lms.stop()
 
   def setOutputFPS(self, fps, main = True):
+    """Sets the upper threshold of the output frames per second.
+
+    This methods sets the minimum allowed distance (measured in time) between two 
+    consecutive frames.
+
+    Args:
+      fps: Frames per second limit.
+      main: if True apply limitation to main output or apply it to the grid output otherwise.
+    
+    Raises:
+      Exception: In case of failure raises an Exception. 
+    """
     if fps > self.DEF_MAX_FPS:
       raise Exception("Maximum fps is {}, you entered {}.".format(*[self.DEF_MAX_FPS, fps]))
 
@@ -514,6 +631,18 @@ class SecurityManager:
     self.lms.filterEvent(encId, 'configure', {'fps': fps})
 
   def setOutputResolution(self, width, height, main = True):
+    """Sets the output stream resolution.
+
+    Sets the output stream resolution to the given parameters.
+
+    Args:
+      width: desired output width.
+      height: desired output height.
+      main: if True apply the resolution change to main output, otherwise apply it to the grid output.
+    
+    Raises:
+      Exception: In case of failure raises an Exception. 
+    """
     state = self.lms.getState()
 
     if main:
@@ -544,6 +673,24 @@ class SecurityManager:
 
 
   def setEncoderParams(self, bitrate, gop, lookahead, bFrames, threads, annexb, preset, main = True):
+    """Sets the output stream encoder configuration.
+
+    Sets the output stream encoder (coupled with x264 implementation) configuration.
+
+    Args:
+      bitrate: desired output bitrate in kbps.
+      gop: desired number of frames between key frames.
+      lookahead: number of frames needed in the encoder buffer.
+      bframes: maximum number of consecutive B Frames.
+      threads: number of threads used by the encoder library.
+      annexb: codification flavour with or without start codes.
+      preset: the configuration preset to be used. All other parameters are set, 
+      after applying the preset.
+      main: if True apply the configuration change to main output, otherwise apply it to grid output.
+    
+    Raises:
+      Exception: In case of failure raises an Exception. 
+    """
     if main:
       encId = self.videoEncoderId
     elif self.grid:
@@ -557,6 +704,17 @@ class SecurityManager:
                                                 'preset': preset})
 
   def getEncoderParams(self, main = True):
+    """Gets the output stream encoder configuration.
+
+    Gets the output stream encoder (coupled with x264 implementation) configuration.
+
+    Args:
+      main: if True get the configuration of the main output, otherwise 
+      get the configuration of the grid output.
+    
+    Raises:
+      Exception: In case of failure raises an Exception. 
+    """
     if main:
       encId = self.videoEncoderId
     elif self.grid:
@@ -573,6 +731,17 @@ class SecurityManager:
     return None
 
   def getSharedMemoryId(self):
+    """Get the Shared Memory Id of the current pipe.
+
+    
+    The main output can be accessed by another process by using this shared memory key.
+
+    Returns:
+      The shared memory ID.
+
+    Raises:
+      Exception: In case of failure raises an Exception. 
+    """
     state = self.lms.getState()
     
     for cFilter in state['filters']:
