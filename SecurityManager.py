@@ -378,7 +378,6 @@ class SecurityManager:
     port = None
     count = 0
     search = True
-    mixerCh = []
     state = None
     while search:
       time.sleep(1)
