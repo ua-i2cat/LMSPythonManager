@@ -29,7 +29,7 @@ class LMSManager:
   sock = None
   BUFFER_SIZE = 65536
 
-  def __init__(self, host, port):
+  def __init__(self, host, port, debug=True):
     """LMSManager constructor
 
     It creates a new istance of the LMSManager.
@@ -40,6 +40,9 @@ class LMSManager:
     """
     self.host = host
     self.port = port
+    self.eJson = None
+    if debug:
+      logging.basicConfig(level=logging.DEBUG)
 
   def testConnection(self):
     """Tests the connectivity of this LMSManager instance
@@ -103,7 +106,7 @@ class LMSManager:
       if 'error' in res and res['error'] != None:
         raise Exception(res['error'])
 
-    print(json.dumps(eJson))
+    logging.debug(json.dumps(eJson))
 
     return res
 
@@ -254,4 +257,26 @@ class LMSManager:
     eJson = {'events': [{'action': action, 'filterId': fId, 'params': params}]}
     return self.sendEvents(eJson)
 
+  def appendFilterEvent(self, fId, action, params, delay=0):
+    """Sends an event to a filter.
+
+    Appends the specified event to an array for the next sendJoinedEvents call. 
+
+    Args: 
+      fId: An integer representing the ID of the filter.
+      action: An string specifiying the action to trigger.
+      params: A dictionary containing all the parameters related to the specified
+      action of the specified filter.
+      delay: An integer specifying the delay that should be applied to the event
+      execution. It is in microseconds units.
+    """
+    if self.eJson:
+      self.eJson['events'].append({'action': action, 'filterId': fId, 'params': params})
+    else:
+      self.eJson = {'events': [{'action': action, 'filterId': fId, 'params': params, 'delay': delay}]}
+
+  def sendJoinedEvents(self):
+    if self.eJson:
+      self.sendEvents(self.eJson)
+      self.eJson = None
 

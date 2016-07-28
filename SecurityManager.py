@@ -747,3 +747,4 @@ class SecurityManager:
       if cFilter['id'] == self.sharedMemoryId:
         return cFilter['memoryId']
 
+    return None
