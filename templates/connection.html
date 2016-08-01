@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+{% block title %}DASHER Connection{% endblock %}
+{% block content %}
+  <form class="form-horizontal" action="connect" method="POST">
+  <fieldset>
+
+  <!-- Form Name -->
+  <legend>DASHER BACKEND CONNECTION</legend>
+
+  <!-- Text input-->
+  <div class="form-group">
+    <label class="col-md-4 control-label" for="domain">Service Domain</label>  
+    <div class="col-md-4">
+    <input id="domain" name="domain" type="text" placeholder="localhost" class="form-control input-md" required="">
+    <span class="help-block">Write here the domain or IP of the DASH service</span>  
+    </div>
+  </div>
+
+  <!-- Text input-->
+  <div class="form-group">
+    <label class="col-md-4 control-label" for="port">Service Port</label>  
+    <div class="col-md-4">
+    <input id="port" name="port" type="text" placeholder="7777" class="form-control input-md" required="">
+    <span class="help-block">Write here the base name that will be used for dash files</span>  
+    </div>
+  </div>
+
+  <!-- Button -->
+  <div class="form-group">
+    <label class="col-md-4 control-label" for="connect"></label>
+    <div class="col-md-4">
+      <button id="connect" name="connect" class="btn btn-primary">Connect</button>
+    </div>
+  </div>
+
+  </fieldset>
+  </form>
+{% endblock %}

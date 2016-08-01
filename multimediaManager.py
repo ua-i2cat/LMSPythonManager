@@ -75,6 +75,9 @@ class MultimediaManager:
     self.rtmpDemuxId = 4
     self.sharedMemoryId = 5
     self.dasherId = 6
+
+  def testConnection(self):
+    return self.lms.testConnection()
    
   def startPipe(self):
     """Starts a pipe with the appropriate outputs.
@@ -343,6 +346,29 @@ class MultimediaManager:
            break
 
     return profiles
+
+  def getActiveProfiles(self):
+    state = self.lms.getState()
+    hasOneAtLeast = False
+
+    profiles = []
+    for profile in self.DEF_DASH_PROFILES:
+      for cFilter in state['filters']:
+        if cFilter['type'] == 'videoEncoder' and cFilter['bitrate'] == profile['bitrate']:
+          profile['active'] = True
+          hasOneAtLeast = True
+      if not 'active' in profile:
+        profile['active'] = False
+      profiles.append(profile)
+
+    if hasOneAtLeast:
+      return profiles
+
+    return []
+	
+
+  def getDefaultProfiles(self):
+    return self.DEF_DASH_PROFILES
 
   def getSharedMemoryId(self):
     """Get the Shared Memory Id of the current pipe.

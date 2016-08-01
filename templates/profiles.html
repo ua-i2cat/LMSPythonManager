@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+{% block title %}DASHER Configuration{% endblock %}
+{% block content %}
+<form>
+  <table class="table table-hover">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Resolution</th>
+        <th>Bitrate</th>
+        <th>FPS</th>
+        <th>Active?</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% i = 0 %}
+    {% for profile in prof %}
+      <tr>
+        <th>{{ i }}</th>
+        <th>{{ profile['width'] }}x{{ profile['height'] }}</th>
+        <th>{{ profile['bitrate'] }}</th>
+        <th>{{ profile['fps'] }}</th>
+        <th><button id="active" name="active" class="btn btn-primary">active</button></th>
+      </tr>
+    {% i += 1 %}
+    {% endfor %}
+    </tbody>
+  </table>
+</form>
+{% endblock %}

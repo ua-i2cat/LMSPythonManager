@@ -1,0 +1,48 @@
+{% extends "layout.html" %}
+{% block title %}DASHER Configuration{% endblock %}
+{% block content %}
+<form class="form-horizontal" action="start" method="POST">
+  <fieldset>
+
+    <!-- Form Name -->
+    <legend>DASHER CONFIGURATION</legend>
+
+    <!-- Text input-->
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="source">Source URL</label>  
+      <div class="col-md-4">
+      <input id="source" name="source" type="text" placeholder="rtmp://localhost/myapp/mytest" class="form-control input-md" required="">
+      <span class="help-block">Write here the source RTSP or RTMP URL</span>  
+      </div>
+    </div>
+
+    <!-- Text input-->
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="basename">Base Name</label>  
+      <div class="col-md-4">
+      <input id="basename" name="basename" type="text" placeholder="dash_test" class="form-control input-md" required="">
+      <span class="help-block">Write here the base name that will be used for dash files</span>  
+      </div>
+    </div>
+
+    <!-- Text input-->
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="segduration">Segment Duration</label>  
+      <div class="col-md-4">
+        <input id="segduration" name="segduration" type="text" placeholder="4" class="form-control input-md" required="">
+        <span class="help-block">Write here the number of seconds of the DASH segments</span>  
+      </div>
+    </div>
+
+    <!-- Button -->
+    <div class="form-group">
+      <label class="col-md-4 control-label" for="start"></label>
+      <div class="col-md-4">
+        <button id="start" name="start" class="btn btn-primary">Start</button>
+      </div>
+    </div>
+
+  </fieldset>
+  </form>
+{% endblock %}
+

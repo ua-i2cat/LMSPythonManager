@@ -271,9 +271,11 @@ class LMSManager:
       execution. It is in microseconds units.
     """
     if self.eJson:
-      self.eJson['events'].append({'action': action, 'filterId': fId, 'params': params})
+      self.eJson['events'].append(
+        {'action': action, 'filterId': fId, 'params': params, 'delay': delay})
     else:
-      self.eJson = {'events': [{'action': action, 'filterId': fId, 'params': params, 'delay': delay}]}
+      self.eJson = {'events': [
+        {'action': action, 'filterId': fId, 'params': params, 'delay': delay}]}
 
   def sendJoinedEvents(self):
     if self.eJson:
