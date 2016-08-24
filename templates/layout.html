@@ -9,12 +9,16 @@
     {% endblock %}
   </head>
   <body>
-    {% block content %}{% endblock %}
-    {% if error %} 
-      <div class="alert alert-danger fade in">
-        <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
-        <strong>Error!</strong> {{ error }}
+    <div class="container">
+      <div class="row row-centered">
+        {% block content %}{% endblock %}
+        {% if error %} 
+          <div class="alert alert-danger fade in">
+            <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+            <strong>Error!</strong> {{ error }}
+          </div>
+        {% endif %}
       </div>
-    {% endif %}
+    <div>
   </body>
 </html>

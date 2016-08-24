@@ -1,8 +1,8 @@
 {% extends "layout.html" %}
 {% block title %}DASHER Configuration{% endblock %}
 {% block content %}
-<form>
-  <table class="table table-hover">
+<form action="setprofile" method="POST">
+  <table class="span5 table table-hover">
     <thead>
       <tr>
         <th>#</th>
@@ -13,16 +13,20 @@
       </tr>
     </thead>
     <tbody>
-    {% i = 0 %}
+    {% set i = 0 %}
     {% for profile in prof %}
       <tr>
         <th>{{ i }}</th>
         <th>{{ profile['width'] }}x{{ profile['height'] }}</th>
         <th>{{ profile['bitrate'] }}</th>
         <th>{{ profile['fps'] }}</th>
-        <th><button id="active" name="active" class="btn btn-primary">active</button></th>
+        {% if profile['active'] %}
+          <th><input type="submit" id="{{ i }}" name="{{ i }}" value="Deactivate" class="btn btn-success"></th>
+        {% else %}
+	  <th><input type="submit" id="{{ i }}" name="{{ i }}" value="Activate" class="btn btn-danger"></th>
+        {% endif %}
       </tr>
-    {% i += 1 %}
+    {% set i = i + 1 %}
     {% endfor %}
     </tbody>
   </table>

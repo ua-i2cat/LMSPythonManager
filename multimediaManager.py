@@ -227,7 +227,8 @@ class MultimediaManager:
       self.lms.removeFilter(self.sharedMemoryId)
       raise Exception("Failed creating path")
 
-    self.setRepresentations(self.sharedMemoryId, profiles)
+
+    self.setRepresentations(profiles)
 
   def getBitratesList(self, profiles):
     sProfs = set()
@@ -306,7 +307,7 @@ class MultimediaManager:
 
     return False
 
-  def setRepresentations(self, inputFilterId, profilesIdx):
+  def setRepresentations(self, profilesIdx):
     profiles = []
     for idx in set(profilesIdx):
       if idx < len(self.DEF_DASH_PROFILES):
@@ -320,7 +321,7 @@ class MultimediaManager:
     for bitrate in sProfs.difference(sCurProf):
       try:
         self.addRepresentation(self.lms.getState(), 
-                               inputFilterId, 
+                               self.sharedMemoryId, 
                                self.getProfileFromBitrate(bitrate))
       except:
         logging.error('Failed creating profile for {}kbps'.format(*[bitrate]))
