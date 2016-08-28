@@ -27,7 +27,7 @@ import math
 import urllib3
 import os
 
-from . import LMSManager
+from lmsManager import LMSManager
 
 class SecurityManager:
   lms = None

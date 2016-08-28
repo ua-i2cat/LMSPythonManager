@@ -27,7 +27,7 @@ import os
 import time
 import logging
 
-from LMSManager import LMSManager
+from .lmsManager import LMSManager
 
 class MultimediaManager:
   lms =  None
@@ -332,6 +332,7 @@ class MultimediaManager:
     state = self.lms.getState()
     for cFilter in state['filters']:
       if cFilter['type'] == 'videoEncoder':
+        print('video encoder {0} in late setProfile'.format(cFilter['id']))
         for i in range(0, 4):
           self.lms.appendFilterEvent(cFilter['id'], 'forceIntra', {}, (i + 1)*1000)
 
@@ -352,21 +353,25 @@ class MultimediaManager:
     state = self.lms.getState()
     hasOneAtLeast = False
 
-    profiles = []
+    curProfs = self.getCurrentProfiles(state)
+    profs = []
     for profile in self.DEF_DASH_PROFILES:
-      for cFilter in state['filters']:
-        if cFilter['type'] == 'videoEncoder' and cFilter['bitrate'] == profile['bitrate']:
+      for curProf in curProfs:
+        if curProf['bitrate'] == profile['bitrate']:
+          print('prof {0} is active'.format(curProf['bitrate']))
           profile['active'] = True
           hasOneAtLeast = True
-      if not 'active' in profile:
+      if 'active' not in profile:
+        print('prof {0} is not active'.format(curProf['bitrate']))
         profile['active'] = False
-      profiles.append(profile)
+      profs.append(profile)      
 
     if hasOneAtLeast:
-      return profiles
+      print(profs)
+      return profs
 
     return []
-	
+
 
   def getDefaultProfiles(self):
     return self.DEF_DASH_PROFILES

@@ -1,7 +1,11 @@
 {% extends "layout.html" %}
-{% block title %}DASHER Configuration{% endblock %}
+{% block title %}DASHER Profiles Selection{% endblock %}
 {% block content %}
 <form action="setprofile" method="POST">
+  <fieldset>
+
+  <!-- Form Name -->
+  <legend>DASHER PROFILES SELECTION</legend>
   <table class="span5 table table-hover">
     <thead>
       <tr>
@@ -30,5 +34,13 @@
     {% endfor %}
     </tbody>
   </table>
+  <!-- Button -->
+  <div class="form-group">
+    <label class="col-md-4 control-label" for="start"></label>
+    <div class="col-md-4">
+      <button id="stop" name="stop" class="btn btn-danger">Stop</button>
+    </div>
+  </div>
+  </fieldset>
 </form>
 {% endblock %}

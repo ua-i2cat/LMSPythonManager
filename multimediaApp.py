@@ -1,5 +1,7 @@
 import urllib3
 import sqlite3
+import os
+import time
 
 from flask import (
   Flask,
@@ -10,9 +12,13 @@ from flask import (
   g
 )
 
-from multimediaManager import MultimediaManager
+from lmsManager.multimediaManager import MultimediaManager
 
-app = Flask(__name__)
+tmpl_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'multimediaApp/templates')
+static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'multimediaApp/static')
+
+app = Flask(__name__, template_folder=tmpl_dir, static_folder=static_dir)
+
 mul = MultimediaManager('127.0.0.1', 7777)
 database = 'mitsu.db'
 
@@ -34,13 +40,13 @@ def init_db():
     cur = db.cursor()
     cur.execute('DROP TABLE IF EXISTS frame_stats')
     cur.execute('CREATE TABLE frame_stats('
-      'blackout int, blockloss real,'
-      'blur real, contrast real,'
-      'exposure real, flickering real,'
-      'freezing int, interlace real,'
-      'letterbox real, noise real,'
-      'pillarbox real, slicing real,'
-      'SA real, TA real,'
+      'blackout int, blockloss real, '
+      'blur real, contrast real, '
+      'exposure real, flickering real, '
+      'freezing int, interlace real, '
+      'letterbox real, noise real, '
+      'pillarbox real, slicing real, '
+      'SA real, TA real, blockiness real, '
       'time int PRIMARY KEY)')
     db.commit()
 
@@ -113,18 +119,22 @@ def start():
   except ValueError:
     return render_template('index.html', error="Segment duration must be an integer, values are in seconds")
   
-  mul.resetPipe()
+  try:
+    mul.resetPipe()
+  except:
+    return render_template('connection.html', error="Ups! Something when wrong, try to reconnect")
+
   try:
     mul.configureDasher('/tmp', basename, segduration, 4, segduration*3)
   except:
-    mul.resetPipe()
+    mul.stopPipe()
     return render_template('index.html', error="Failed configuring dasher")
 
   try:
     if uri.scheme == 'rtsp':
       mul.addRTSPSource(source)
   except Exception as e:
-    mul.resetPipe()
+    mul.stopPipe()
     return render_template('index.html', error="Failed adding source: {0}".format(e))
 
   profiles = mul.getActiveProfiles()
@@ -132,11 +142,15 @@ def start():
   if len(profiles) > 0:
     return render_template('profiles.html', prof=profiles)
 
-  mul.resetPipe()
+  mul.stopPipe()
   return render_template('index.html', error="No active profiles, pipe reseted")
 
 @app.route('/setprofile', methods=['POST'])
 def setprofile():
+  if 'stop' in request.form:
+    mul.stopPipe()
+    return redirect(url_for('home'))  
+
   cProf = mul.getActiveProfiles()
   actProf = []
   for idx, profile in enumerate(cProf):
@@ -147,15 +161,33 @@ def setprofile():
       actProf.append(idx)
 
   if not len(actProf):
-    return render_template('index.html', error="There must be at list one active representation")
+    return render_template('profiles.html', prof=cProf)
 
-  mul.setRepresentations(actProf)
+  try:
+    mul.setRepresentations(actProf)
+  except:
+    mul.stopPipe()
+    return render_template('index.html', error="Failed setting profiles, pipe reseted")
+  
   profiles = mul.getActiveProfiles()
+  for idx, profile in enumerate(profiles):
+    if idx not in actProf and profile['active']:
+      return render_template(
+        'profiles.html',
+        prof=profiles,
+        error="Something went wrong, selected profiles could not be set"
+      )
+    elif idx in actProf and not profile['active']:
+      return render_template(
+        'profiles.html',
+        prof=profiles,
+        error="Something went wrong, selected profiles could not be set"
+      )
 
   if len(profiles) > 0:
     return render_template('profiles.html', prof=profiles)
 
-  mul.resetPipe()
+  mul.stopPipe()
   return render_template('index.html', error="No active profiles, pipe reseted")
 
 @app.route('/qoemonitor', methods=['POST'])
@@ -164,7 +196,12 @@ def qoe_insert():
   if not json:
     raise Exception('mime type must application/json to insert data')
 
-  lastrow = insert_qoe_json(json)
+  try:
+    lastrow = insert_qoe_json('frame_stats', json)
+  except:
+    return 'error inserting data'
+
+  return 'sucessfully added data'
 
 if __name__ == '__main__':
   init_db()
