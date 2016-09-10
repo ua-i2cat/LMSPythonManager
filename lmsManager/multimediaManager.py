@@ -100,6 +100,18 @@ class MultimediaManager:
                            'maxSeg': maxSeg,
                            'minBuffTime': minBuffTime})
 
+  def getDasher(self, state):
+    for cFilter in state['filters']:
+      if cFilter['id'] == self.dasherId:
+        return cFilter
+
+  def getEncoders(self, state):
+    encoders = []
+    for cFilter in state['filters']:
+      if cFilter['type'] == 'videoEncoder':
+        encoders.append(cFilters)
+    return encoders
+
   def resetPipe(self):
     self.stopPipe()
     self.startPipe()
@@ -256,6 +268,8 @@ class MultimediaManager:
       self.lms.removeFilter(resId)
       self.lms.removeFilter(encId)
       raise Exception("Failed creating filters")
+
+    dasher = self.getDasher(state)
       
     self.lms.filterEvent(resId, 'configure', 
                           {'pixelFormat': 2, 
@@ -265,7 +279,8 @@ class MultimediaManager:
     self.lms.filterEvent(encId, 'configure', 
                          {'fps': profile['fps'], 
                          'bitrate': profile['bitrate'],
-                         'gop': profile['fps']})
+                         'gop': profile['fps'],
+                         'gopTime': dasher['segDurInSec'] * 1000000 })
 
     srcPathId = self.getMaxPathId(state) + 1
 
@@ -329,49 +344,27 @@ class MultimediaManager:
     for bitrate in sCurProf.difference(sProfs):
       self.removeRepresentationByBitrate(bitrate)
 
-    state = self.lms.getState()
-    for cFilter in state['filters']:
-      if cFilter['type'] == 'videoEncoder':
-        print('video encoder {0} in late setProfile'.format(cFilter['id']))
-        for i in range(0, 4):
-          self.lms.appendFilterEvent(cFilter['id'], 'forceIntra', {}, (i + 1)*1000)
-
-    self.lms.sendJoinedEvents()
-
   def getCurrentProfiles(self, state):
     profiles = []
     for cFilter in state['filters']:
       if cFilter['type'] == 'videoEncoder':
-        for profile in self.DEF_DASH_PROFILES:
-         if profile['bitrate'] == cFilter['bitrate']:
-           profiles.append(profile)
-           break
+        for idx, profile in enumerate(self.DEF_DASH_PROFILES):
+          if profile['bitrate'] == cFilter['bitrate']:
+            profile['idx'] = idx
+            profiles.append(profile)
+            break
 
     return profiles
 
-  def getActiveProfiles(self):
-    state = self.lms.getState()
-    hasOneAtLeast = False
-
-    curProfs = self.getCurrentProfiles(state)
+  def getCurrentProfilesIdx(self):
     profs = []
-    for profile in self.DEF_DASH_PROFILES:
-      for curProf in curProfs:
-        if curProf['bitrate'] == profile['bitrate']:
-          print('prof {0} is active'.format(curProf['bitrate']))
-          profile['active'] = True
-          hasOneAtLeast = True
-      if 'active' not in profile:
-        print('prof {0} is not active'.format(curProf['bitrate']))
-        profile['active'] = False
-      profs.append(profile)      
+    state = self.lms.getState()
+    for profile in self.getCurrentProfiles(state):
+      profs.append(profile['idx'])
+    return profs
 
-    if hasOneAtLeast:
-      print(profs)
-      return profs
-
-    return []
-
+  def getProfiles(self):
+    return self.DEF_DASH_PROFILES
 
   def getDefaultProfiles(self):
     return self.DEF_DASH_PROFILES

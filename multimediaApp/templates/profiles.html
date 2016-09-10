@@ -24,7 +24,7 @@
         <th>{{ profile['width'] }}x{{ profile['height'] }}</th>
         <th>{{ profile['bitrate'] }}</th>
         <th>{{ profile['fps'] }}</th>
-        {% if profile['active'] %}
+        {% if i in actives %}
           <th><input type="submit" id="{{ i }}" name="{{ i }}" value="Deactivate" class="btn btn-success"></th>
         {% else %}
 	  <th><input type="submit" id="{{ i }}" name="{{ i }}" value="Activate" class="btn btn-danger"></th>

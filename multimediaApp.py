@@ -1,7 +1,6 @@
 import urllib3
 import sqlite3
 import os
-import time
 
 from flask import (
   Flask,
@@ -125,7 +124,7 @@ def start():
     return render_template('connection.html', error="Ups! Something when wrong, try to reconnect")
 
   try:
-    mul.configureDasher('/tmp', basename, segduration, 4, segduration*3)
+    mul.configureDasher('/tmp', basename, segduration, 6, segduration*4)
   except:
     mul.stopPipe()
     return render_template('index.html', error="Failed configuring dasher")
@@ -137,10 +136,10 @@ def start():
     mul.stopPipe()
     return render_template('index.html', error="Failed adding source: {0}".format(e))
 
-  profiles = mul.getActiveProfiles()
+  profiles = mul.getCurrentProfilesIdx()
 
   if len(profiles) > 0:
-    return render_template('profiles.html', prof=profiles)
+    return render_template('profiles.html', prof=mul.getProfiles(), actives=profiles)
 
   mul.stopPipe()
   return render_template('index.html', error="No active profiles, pipe reseted")
@@ -151,41 +150,32 @@ def setprofile():
     mul.stopPipe()
     return redirect(url_for('home'))  
 
-  cProf = mul.getActiveProfiles()
-  actProf = []
-  for idx, profile in enumerate(cProf):
-    if str(idx) in request.form:
-      if 'Activate' == request.form[str(idx)]:
-        actProf.append(idx)
-    elif profile['active']:
-      actProf.append(idx)
-
-  if not len(actProf):
-    return render_template('profiles.html', prof=cProf)
+  profs = set(mul.getCurrentProfilesIdx())
+  for key in request.form:
+    if key.isdigit() and request.form[key] == 'Activate':
+      profs.add(int(key))
+    elif key.isdigit() and int(key) in profs:
+      profs.remove(int(key))
+      
+  if not len(profs):
+    return render_template('profiles.html', prof=mul.getProfiles())
 
   try:
-    mul.setRepresentations(actProf)
+    mul.setRepresentations(list(profs))
   except:
     mul.stopPipe()
     return render_template('index.html', error="Failed setting profiles, pipe reseted")
-  
-  profiles = mul.getActiveProfiles()
-  for idx, profile in enumerate(profiles):
-    if idx not in actProf and profile['active']:
-      return render_template(
-        'profiles.html',
-        prof=profiles,
-        error="Something went wrong, selected profiles could not be set"
-      )
-    elif idx in actProf and not profile['active']:
-      return render_template(
-        'profiles.html',
-        prof=profiles,
-        error="Something went wrong, selected profiles could not be set"
-      )
+ 
+  actProf = mul.getCurrentProfilesIdx()
+  if profs != set(actProf):
+    return render_template(
+      'profiles.html',
+      prof=mul.getProfiles(),
+      error="Something went wrong, selected profiles could not be set"
+    )
 
-  if len(profiles) > 0:
-    return render_template('profiles.html', prof=profiles)
+  if len(actProf) > 0:
+    return render_template('profiles.html', prof=mul.getProfiles(), actives=actProf)
 
   mul.stopPipe()
   return render_template('index.html', error="No active profiles, pipe reseted")
